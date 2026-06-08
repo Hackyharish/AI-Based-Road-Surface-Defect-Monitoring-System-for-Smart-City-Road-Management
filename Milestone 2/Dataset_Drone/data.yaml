@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 6
+names: ['Crack_Mild', 'Crack_Severe', 'Manhole', 'Pothole_Mild', 'Pothole_Severe', 'Smooth']
+
+roboflow:
+  workspace: resistor-ssnpj
+  project: drone-jg88j
+  version: dataset
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/resistor-ssnpj/drone-jg88j/dataset/dataset
