@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Road Defect Monitor</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+  :root {
+    --bg: #0d1117; --bg2: #161b22; --bg3: #1c2128;
+    --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.15);
+    --text: #e6edf3; --text2: #8b949e; --text3: #6e7681;
+    --teal: #1d9e75; --teal-light: #5dcaa5;
+    --red: #e24b4a; --amber: #ef9f27; --blue: #378add; --green: #639922; --purple: #7f77dd;
+    --radius: 10px; --radius-lg: 14px;
+  }
+  :root[data-theme="light"] {
+    --bg: #ffffff; --bg2: #f6f8fa; --bg3: #ebf0f4;
+    --border: rgba(0,0,0,0.1); --border2: rgba(0,0,0,0.15);
+    --text: #1F2328; --text2: #656d76; --text3: #8c959f;
+    --teal: #1a8c67; --teal-light: #1d9e75;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; font-size: 14px; min-height: 100vh; transition: background 0.3s, color 0.3s; }
+  
+  .shell { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+  .sidebar { background: var(--bg2); border-right: 1px solid var(--border); padding: 20px 0; display: flex; flex-direction: column; gap: 4px; transition: background 0.3s, border 0.3s; }
+  .sidebar-logo { padding: 0 20px 20px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+  .sidebar-logo .wordmark { font-size: 15px; font-weight: 600; color: var(--text); }
+  .sidebar-logo .sub { font-size: 11px; color: var(--text3); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 20px; cursor: pointer; color: var(--text2); transition: all 0.15s; border-left: 2px solid transparent; font-size: 13px; }
+  .nav-item:hover { background: var(--bg3); color: var(--text); }
+  .nav-item.active { background: var(--bg3); color: var(--teal-light); border-left-color: var(--teal); }
+  .nav-section { padding: 14px 20px 4px; font-size: 10px; text-transform: uppercase; color: var(--text3); }
+
+  .main { overflow-y: auto; }
+  .topbar { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; }
+  .topbar-title { font-size: 16px; font-weight: 600; }
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+  .badge-teal { background: rgba(29,158,117,0.15); color: var(--teal-light); }
+  .badge-gray { background: var(--bg3); color: var(--text2); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  .content { padding: 24px; }
+  .page { display: none; }
+  .page.active { display: block; }
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; }
+  .card-title { font-size: 12px; text-transform: uppercase; color: var(--text3); margin-bottom: 12px; }
+
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+  .metric { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .metric-label { font-size: 11px; color: var(--text3); margin-bottom: 6px; }
+  .metric-val { font-size: 24px; font-weight: 600; }
+
+  .model-switch { display: flex; gap: 10px; margin-bottom: 20px; }
+  .model-btn { flex: 1; padding: 14px; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; color: var(--text2); }
+  .model-btn.active { border-color: var(--teal); background: rgba(29,158,117,0.08); color: var(--text); }
+  
+  .form-group { flex: 1; margin-bottom: 16px; }
+  .form-label { font-size: 11px; color: var(--text3); margin-bottom: 5px; display: block; }
+  input[type="text"], input[type="number"], select { width: 100%; background: var(--bg3); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 12px; font-size: 13px; outline: none; }
+  
+  .btn { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border2); background: transparent; color: var(--text); cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary { background: var(--teal); border-color: var(--teal); color: #fff; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .btn-labor { background: rgba(55, 138, 221, 0.15); border-color: var(--blue); color: var(--blue); font-size: 11px;}
+  .btn-labor.active { background: var(--blue); color: #fff; }
+  .btn-danger { background: rgba(226,75,74,0.15); border-color: var(--red); color: var(--red); }
+  .btn-warning { background: rgba(239,159,39,0.15); border-color: var(--amber); color: var(--amber); }
+
+  .dropzone { border: 1.5px dashed var(--border2); border-radius: var(--radius); padding: 32px; text-align: center; cursor: pointer; }
+  #infer-result { margin-top: 20px; }
+  .result-img { width: 100%; border-radius: var(--radius); border: 1px solid var(--border); }
+  
+  .priority-badge { display: inline-flex; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+  .p-CRITICAL { background: rgba(226,75,74,0.2); color: #e24b4a; }
+  .p-HIGH     { background: rgba(239,159,39,0.2); color: #ef9f27; }
+  .p-MEDIUM   { background: rgba(239,159,39,0.1); color: #ef9f27; }
+  .p-LOW      { background: rgba(29,158,117,0.15); color: var(--teal-light); }
+  .p-NORMAL   { background: var(--bg3); color: var(--text2); }
+
+  .status-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase; }
+  .s-auto { background: rgba(127,119,221,0.2); color: var(--purple); }
+  .s-pending { background: rgba(239,159,39,0.2); color: #ef9f27; }
+  .s-progress { background: rgba(55,138,221,0.2); color: var(--blue); }
+  .s-completed { background: rgba(139,148,158,0.2); color: var(--text3); }
+
+  .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; }
+  .log-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .log-table th { padding: 8px 12px; text-align: left; color: var(--text3); border-bottom: 1px solid var(--border); text-transform: uppercase; }
+  .log-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); }
+  
+  #map { width: 100%; height: 350px; border-radius: var(--radius); border: 1px solid var(--border); z-index: 1;}
+  #toast { position: fixed; bottom: 24px; right: 24px; background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--radius); padding: 12px 16px; transform: translateY(80px); opacity: 0; transition: all 0.25s; z-index: 999; }
+  #toast.show { transform: translateY(0); opacity: 1; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes progressAnim { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
+
+  .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: 0.2s; z-index: 1000; backdrop-filter: blur(2px); }
+  .modal-overlay.show { opacity: 1; pointer-events: all; }
+  .modal { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); width: 400px; max-width: 90%; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+  .modal-header { font-size: 16px; font-weight: 600; margin-bottom: 16px; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+<script>
+  let currentTheme = localStorage.getItem("theme") || "dark";
+  document.documentElement.setAttribute("data-theme", currentTheme);
+</script>
+
+<div class="shell">
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><i class="ti ti-road" style="font-size:20px;color:var(--teal)"></i><span class="wordmark">RoadDefect AI</span></div>
+      <div class="sub">Time-Optimized Routing System</div>
+    </div>
+    <div class="nav-section">Analysis</div>
+    <div class="nav-item active" onclick="showPage('overview')"><i class="ti ti-layout-dashboard"></i> Overview</div>
+    <div class="nav-item" onclick="showPage('infer')"><i class="ti ti-scan"></i> Run Batch Inference</div>
+    <div class="nav-item" onclick="showPage('log')"><i class="ti ti-database"></i> Detection log</div>
+    <div class="nav-item" onclick="showPage('labor')"><i class="ti ti-helmet"></i> Fleet Dispatch</div>
+    <div class="nav-section">Setup</div>
+    <div class="nav-item" onclick="showPage('models')"><i class="ti ti-cpu"></i> Model config</div>
+    <div style="flex:1"></div>
+    <div style="padding:16px 20px;border-top:1px solid var(--border);font-size:11px;color:var(--text3)">
+      Backend: <span id="api-status-txt">checking…</span>
+    </div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="page-title">Overview</div>
+      <div class="topbar-right">
+        <span id="active-model-badge" class="badge badge-gray"><span class="dot"></span> No model active</span>
+        <button class="btn btn-sm" onclick="toggleTheme()" id="theme-btn"></button>
+        <button class="btn btn-sm" onclick="refreshAll()"><i class="ti ti-refresh"></i></button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="page active" id="page-overview">
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Total inferences</div><div class="metric-val" id="m-total">—</div></div>
+          <div class="metric"><div class="metric-label">Critical detections</div><div class="metric-val" id="m-critical" style="color:var(--red)">—</div></div>
+          <div class="metric"><div class="metric-label">Avg priority score</div><div class="metric-val" id="m-avg" style="color:var(--amber)">—</div></div>
+          <div class="metric"><div class="metric-label">Repairs (Done / Pending)</div><div class="metric-val" id="m-labor">—</div></div>
+        </div>
+        <div class="card" style="margin-bottom: 24px;">
+            <div class="card-title">Geospatial Defect Map (Live)</div>
+            <div id="map"></div>
+        </div>
+        <div class="charts-grid">
+          <div class="card"><div class="card-title">Defect class distribution</div><div class="chart-wrap" style="height:220px"><canvas id="chart-class"></canvas></div></div>
+          <div class="card"><div class="card-title">Priority breakdown</div><div class="chart-wrap" style="height:220px"><canvas id="chart-priority"></canvas></div></div>
+        </div>
+      </div>
+
+      <div class="page" id="page-infer">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+          <div>
+            <div class="card-title" style="margin-bottom:8px">Active model</div>
+            <div class="model-switch">
+              <div class="model-btn active" id="mbtn-car" onclick="selectModel('car')"><div class="mb-header"><i class="ti ti-car"></i> <span class="mb-title">Car-mounted</span></div><span class="mb-status badge badge-gray" id="mb-car-status">Not loaded</span></div>
+              <div class="model-btn" id="mbtn-drone" onclick="selectModel('drone')"><div class="mb-header"><i class="ti ti-drone"></i> <span class="mb-title">Drone aerial</span></div><span class="mb-status badge badge-gray" id="mb-drone-status">Not loaded</span></div>
+            </div>
+          </div>
+          <div>
+            <div class="card-title" style="margin-bottom:8px">Confidence threshold</div>
+            <div style="display:flex; gap:12px; padding-top:6px;">
+              <input type="range" id="conf-slider" min="0.1" max="0.9" step="0.05" value="0.25" style="flex:1" oninput="document.getElementById('conf-val').textContent=this.value">
+              <span id="conf-val" style="color:var(--teal-light)">0.25</span>
+            </div>
+          </div>
+        </div>
+        <div class="dropzone" id="dropzone" onclick="document.getElementById('file-in').click()">
+          <i class="ti ti-upload" id="dz-icon"></i>
+          <p id="dz-label">Drop images or a video here, or click to browse</p>
+          <p style="font-size:11px; color:var(--text3); margin-top:6px" id="dz-sublabel">Images: JPG/PNG/BMP &nbsp;|&nbsp; Video: MP4/AVI/MOV/MKV</p>
+          <input type="file" id="file-in" accept="image/*,video/mp4,video/avi,video/quicktime,video/x-matroska,.mkv" multiple style="display:none" onchange="handleFile(this)">
+        </div>
+        <div id="video-options" style="display:none; margin-top:14px; padding:14px; background:var(--bg3); border-radius:8px; border:1px solid var(--border)">
+          <div style="font-size:12px; color:var(--text2); margin-bottom:10px;"><i class="ti ti-video" style="color:var(--blue)"></i> <b>Video Analysis Settings</b></div>
+          <div style="display:flex; align-items:center; gap:12px;">
+            <label class="form-label" style="white-space:nowrap; margin:0">Frames / second to analyse:</label>
+            <input type="range" id="sample-fps-slider" min="0.25" max="5" step="0.25" value="1" style="flex:1" oninput="document.getElementById('sample-fps-val').textContent=this.value + ' fps'">
+            <span id="sample-fps-val" style="color:var(--teal-light); min-width:50px">1 fps</span>
+          </div>
+          <div style="font-size:11px; color:var(--text3); margin-top:6px;">Lower = faster processing &amp; fewer log entries. Higher = more thorough scan.</div>
+        </div>
+        <div id="infer-result"></div>
+      </div>
+
+      <div class="page" id="page-log">
+        <div style="display:flex; justify-content:space-between; margin-bottom:16px">
+          <span style="color:var(--text2);font-size:13px">Raw detection history</span>
+          <div style="display:flex;gap:8px"><button class="btn btn-sm" onclick="clearLog()"><i class="ti ti-trash"></i> Clear</button></div>
+        </div>
+        <table class="log-table">
+          <thead><tr><th>#</th><th>Time</th><th>Model</th><th>Priority</th><th>Defect</th><th>GPS</th><th>Labor Action</th></tr></thead>
+          <tbody id="log-tbody"><tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text3)">No detections yet</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="page" id="page-labor">
+        <div style="display:flex; justify-content:space-between; margin-bottom:16px">
+          <span style="color:var(--text2);font-size:13px">Time-Optimized Dispatched Crews</span>
+          <div style="display:flex;gap:8px">
+              <button class="btn btn-sm btn-warning" onclick="simulateTimeLeap(1)" title="Fast-forward +1 Hour"><i class="ti ti-player-track-next"></i> +1 Hr</button>
+              <button class="btn btn-sm btn-warning" onclick="simulateTimeLeap(2)" title="Fast-forward +2 Hours"><i class="ti ti-player-track-next"></i> +2 Hrs</button>
+          </div>
+        </div>
+        <table class="log-table">
+          <thead><tr><th>Job ID</th><th>Assigned Team</th><th>Status</th><th>Defect & Priority</th><th>Location</th><th>Est. Completion</th></tr></thead>
+          <tbody id="labor-tbody"><tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text3)">No active work orders</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="page" id="page-models">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+          <div class="card"><div style="font-weight:600;margin-bottom:14px"><i class="ti ti-car" style="color:var(--teal)"></i> Car model</div><div class="form-group"><input type="text" id="car-path" placeholder="/path/to/car_best.pt" /></div><button class="btn btn-primary" style="width:100%" onclick="loadModel('car')">Load car model</button></div>
+          <div class="card"><div style="font-weight:600;margin-bottom:14px"><i class="ti ti-drone" style="color:var(--purple)"></i> Drone model</div><div class="form-group"><input type="text" id="drone-path" placeholder="/path/to/drone_best.pt" /></div><button class="btn btn-primary" style="width:100%;background:var(--purple);border-color:var(--purple)" onclick="loadModel('drone')">Load drone model</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="assign-modal" class="modal-overlay">
+    <div class="modal">
+        <div class="modal-header">Update Job <span id="modal-job-id" style="color:var(--text3)"></span> <i class="ti ti-x" style="cursor:pointer" onclick="closeModal()"></i></div>
+        <div class="form-group">
+            <label class="form-label">Contractor / City Team</label>
+            <select id="modal-team-select"></select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Status Update</label>
+            <select id="modal-status-select">
+                <option value="Manual Reassign">Manual Reassign</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed (Fixed)</option>
+            </select>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-top:24px;">
+            <button class="btn btn-danger btn-sm" onclick="saveAssignment(null)">Unassign</button>
+            <button class="btn btn-primary btn-sm" onclick="saveAssignment()">Save Update</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const BASE = ""; 
+let activeModel = "car";
+let classChart = null, priorityChart = null;
+const CLASS_COLORS = { "Pothole_Severe": "#e24b4a", "Crack_Severe": "#ba7517", "Pothole_Mild": "#ef9f27", "Crack_Mild": "#639922", "Smooth": "#1d9e75" };
+const PRIORITY_COLORS = { "CRITICAL": "#e24b4a", "HIGH": "#ef9f27", "MEDIUM": "#fac775", "LOW": "#1d9e75", "NORMAL": "#8b949e" };
+let currentTargetJobId = null;
+
+document.getElementById("theme-btn").innerHTML = currentTheme === "light" ? '<i class="ti ti-moon"></i>' : '<i class="ti ti-sun"></i>';
+
+// Map Init (Chennai)
+let defectMap = L.map('map').setView([13.0500, 80.2100], 12); 
+let mapLayer = null;
+let markerGroup = L.layerGroup().addTo(defectMap);
+
+function applyThemeToMap(theme) {
+    if(mapLayer) defectMap.removeLayer(mapLayer);
+    const url = theme === 'light' ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png' : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+    mapLayer = L.tileLayer(url, { attribution: '&copy; CARTO' }).addTo(defectMap);
+}
+applyThemeToMap(currentTheme);
+
+function toggleTheme() {
+    currentTheme = currentTheme === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", currentTheme);
+    localStorage.setItem("theme", currentTheme);
+    document.getElementById("theme-btn").innerHTML = currentTheme === "light" ? '<i class="ti ti-moon"></i>' : '<i class="ti ti-sun"></i>';
+    applyThemeToMap(currentTheme);
+    loadStats(); 
+}
+
+// Generate Checkmark icon if completed
+function createMarkerIcon(color, isCompleted=false) {
+    let innerSvg = `<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>`;
+    if (isCompleted) {
+        innerSvg = `<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm-2 10l-2.5-2.5 1.41-1.41L10 9.17l4.59-4.59L16 6l-6 6z"/>`;
+    }
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${color}" width="30px" height="30px">${innerSvg}</svg>`;
+    return L.divIcon({ className: 'custom-div-icon', html: svg, iconSize: [30, 30], iconAnchor: [15, 30] });
+}
+
+function showPage(key) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
+  document.getElementById("page-" + key).classList.add("active");
+  document.querySelector(`.nav-item[onclick*="${key}"]`).classList.add("active");
+  const titles = {overview:"Overview", infer:"Run Batch Inference", log:"Detection log", labor:"Fleet Dispatch", models:"Model config"};
+  document.getElementById("page-title").textContent = titles[key];
+  if (key === "overview") { loadStats(); setTimeout(() => defectMap.invalidateSize(), 200); }
+  if (key === "log") loadLog(); 
+  if (key === "labor") loadLabor();
+}
+
+function toast(msg, type="info") {
+  const el = document.getElementById("toast");
+  el.style.borderLeft = `3px solid ${type==="error"?"var(--red)":"var(--teal)"}`;
+  el.textContent = msg; el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), 3000);
+}
+
+async function apiFetch(path, opts={}) {
+  try { return await (await fetch(BASE + path, opts)).json(); } catch(e) { return {error: "Cannot reach backend"}; }
+}
+
+async function checkStatus() {
+  const data = await apiFetch("/api/status");
+  if (data.error) {
+    document.getElementById("api-status-txt").textContent = "offline";
+    document.getElementById("api-status-txt").style.color = "var(--red)"; return;
+  }
+  document.getElementById("api-status-txt").textContent = "online";
+  document.getElementById("api-status-txt").style.color = "var(--teal-light)";
+
+  const teamSelect = document.getElementById("modal-team-select");
+  if (teamSelect.options.length === 0 && data.teams) {
+      data.teams.forEach(t => teamSelect.add(new Option(t, t)));
+  }
+
+  for (const [key, info] of Object.entries(data.models)) {
+    const badgeEl = document.getElementById(`mb-${key}-status`);
+    if (badgeEl) {
+      badgeEl.className = "mb-status badge " + (info.loaded ? "badge-teal" : "badge-gray");
+      badgeEl.innerHTML = `<span class="dot"></span> ${info.loaded ? "Loaded ✓" : "Not loaded"}`;
+    }
+  }
+
+  const am = data.models[activeModel];
+  const activeBadgeEl = document.getElementById("active-model-badge");
+  if (activeBadgeEl) {
+    activeBadgeEl.className = "badge " + (am && am.loaded ? "badge-teal" : "badge-gray");
+    activeBadgeEl.innerHTML = `<span class="dot"></span> ${activeModel} ` + (am && am.loaded ? "active" : "not loaded");
+  }
+}
+
+async function loadModel(key) {
+  const path = document.getElementById(`${key}-path`).value.trim();
+  const data = await apiFetch("/api/load_model", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({key, path}) });
+  if (data.error) toast(data.error, "error"); else { toast(data.message, "ok"); checkStatus(); }
+}
+
+function selectModel(key) {
+  activeModel = key;
+  document.querySelectorAll(".model-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById("mbtn-" + key).classList.add("active"); checkStatus();
+}
+
+const VIDEO_EXTS = ["mp4","avi","mov","mkv","webm","wmv"];
+function isVideoFile(f) { return VIDEO_EXTS.includes(f.name.split(".").pop().toLowerCase()); }
+
+function handleFile(input) {
+  if (!input.files.length) return;
+  const files = Array.from(input.files);
+  const hasVideo = files.some(isVideoFile);
+  const hasImages = files.some(f => !isVideoFile(f));
+
+  if (hasVideo && files.length > 1) {
+    toast("Please upload one video at a time.", "error"); return;
+  }
+  if (hasVideo && hasImages) {
+    toast("Please upload either images or a video, not both.", "error"); return;
+  }
+
+  document.getElementById("video-options").style.display = hasVideo ? "block" : "none";
+
+  if (hasVideo) {
+    runVideoInference(files[0]);
+  } else {
+    runInference(files);
+  }
+}
+
+// Drag & drop wiring
+const dz = document.getElementById("dropzone");
+dz.addEventListener("dragover", e => e.preventDefault());
+dz.addEventListener("drop", e => {
+  e.preventDefault();
+  if (e.dataTransfer.files.length > 0) {
+    const tmpInput = { files: e.dataTransfer.files };
+    handleFile(tmpInput);
+  }
+});
+
+async function runInference(files) {
+  const fd = new FormData(); 
+  for(let i=0; i<files.length; i++) { fd.append("images", files[i]); }
+  fd.append("model", activeModel); 
+  fd.append("conf", document.getElementById("conf-slider").value);
+  
+  document.getElementById("infer-result").innerHTML = `<div style="text-align:center;color:var(--text2);padding:20px"><i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Running inference on ${files.length} image(s) and assigning priority fleet…</div>`;
+  
+  let r = await fetch(BASE + "/api/infer", {method:"POST", body: fd});
+  let data = await r.json();
+
+  if (data.error) { document.getElementById("infer-result").innerHTML = `<div style="color:var(--red)">${data.error}</div>`; return; }
+
+  let html = `<div style="margin-bottom:14px; padding:12px; background:var(--bg3); border-radius:8px; border:1px solid var(--border);">
+      <span style="color:var(--teal-light)"><i class="ti ti-check"></i> Batch processed successfully</span><br>
+      <span style="font-size:12px; color:var(--text2)">Analyzed ${data.inferences.length} defects and globally dispatched <b>${data.dispatched_count} crews</b> based on optimized time-routing.</span>
+  </div>`;
+  
+  if(data.first_image) {
+      html += `
+      <div class="result-grid">
+         <img src="data:image/jpeg;base64,${data.first_image}" class="result-img">
+         <div style="color:var(--text2); font-size:12px;">Displaying 1st image from batch. Check the log for full details.</div>
+      </div>`;
+  }
+
+  document.getElementById("infer-result").innerHTML = html;
+  toast(`Processed ${files.length} images`, "ok"); 
+  refreshAll(); 
+}
+
+async function runVideoInference(file) {
+  const sampleFps = parseFloat(document.getElementById("sample-fps-slider").value);
+  const fd = new FormData();
+  fd.append("video", file);
+  fd.append("model", activeModel);
+  fd.append("conf", document.getElementById("conf-slider").value);
+  fd.append("sample_fps", sampleFps);
+
+  const resultEl = document.getElementById("infer-result");
+  resultEl.innerHTML = `
+    <div style="padding:20px; background:var(--bg3); border-radius:8px; border:1px solid var(--border); text-align:center;">
+      <div style="margin-bottom:12px"><i class="ti ti-video" style="color:var(--blue); font-size:24px"></i></div>
+      <div style="color:var(--text2); margin-bottom:6px">Analysing <b>${file.name}</b> at <b>${sampleFps} fps</b>…</div>
+      <div style="font-size:11px; color:var(--text3)">Uploading and processing frames. This may take a moment for longer videos.</div>
+      <div style="margin-top:14px; height:4px; background:var(--bg2); border-radius:4px; overflow:hidden">
+        <div style="height:100%; width:100%; background:linear-gradient(90deg,var(--teal),var(--blue)); animation: progressAnim 2s ease-in-out infinite;"></div>
+      </div>
+    </div>`;
+
+  try {
+    const r = await fetch(BASE + "/api/infer_video", {method:"POST", body: fd});
+    const data = await r.json();
+
+    if (data.error) { resultEl.innerHTML = `<div style="color:var(--red); padding:12px"><i class="ti ti-alert-circle"></i> ${data.error}</div>`; return; }
+
+    const criticalCount = data.inferences.filter(i => i.priority_level === "CRITICAL").length;
+    const highCount     = data.inferences.filter(i => i.priority_level === "HIGH").length;
+    const cleanCount    = data.inferences.filter(i => i.priority_level === "NORMAL").length;
+
+    let html = `
+      <div style="margin-bottom:14px; padding:14px; background:var(--bg3); border-radius:8px; border:1px solid var(--border);">
+        <div style="color:var(--teal-light); font-weight:600; margin-bottom:8px"><i class="ti ti-video"></i> Video analysis complete</div>
+        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:10px; font-size:12px; text-align:center; margin-bottom:8px;">
+          <div><div style="font-size:18px; font-weight:600; color:var(--text)">${data.frames_analysed}</div><div style="color:var(--text3)">Frames scanned</div></div>
+          <div><div style="font-size:18px; font-weight:600; color:var(--red)">${criticalCount}</div><div style="color:var(--text3)">Critical</div></div>
+          <div><div style="font-size:18px; font-weight:600; color:var(--amber)">${highCount}</div><div style="color:var(--text3)">High</div></div>
+          <div><div style="font-size:18px; font-weight:600; color:var(--purple)">${data.dispatched_count}</div><div style="color:var(--text3)">Crews dispatched</div></div>
+        </div>
+        <div style="font-size:11px; color:var(--text3)">Duration: ${data.duration_s}s &nbsp;|&nbsp; ${data.frames_analysed} frames sampled at ${data.sample_fps} fps &nbsp;|&nbsp; ${data.inferences.length} log entries created</div>
+      </div>`;
+
+    if (data.worst_frame_image) {
+      html += `
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px; color:var(--text3); margin-bottom:6px; text-transform:uppercase">Worst detected frame (highest severity)</div>
+          <img src="data:image/jpeg;base64,${data.worst_frame_image}" class="result-img">
+        </div>`;
+    } else {
+      html += `<div style="padding:12px; color:var(--teal-light); font-size:13px; text-align:center"><i class="ti ti-check"></i> No defects detected in any sampled frame — road surface looks clean!</div>`;
+    }
+
+    resultEl.innerHTML = html;
+    toast(`Video processed: ${data.frames_analysed} frames analysed`, "ok");
+    refreshAll();
+
+  } catch(e) {
+    resultEl.innerHTML = `<div style="color:var(--red); padding:12px"><i class="ti ti-alert-circle"></i> Failed to process video: ${e.message}</div>`;
+  }
+}
+
+async function updateMapPins() {
+  const data = await apiFetch("/api/log?n=100");
+  if (!Array.isArray(data)) return;
+  
+  markerGroup.clearLayers();
+  data.forEach(r => {
+      if(r.gps && r.gps.lat && r.gps.lon) {
+          const isCompleted = r.labor_status === "Completed";
+          const mColor = isCompleted ? "#6e7681" : (PRIORITY_COLORS[r.priority_level]||"#888");
+          const marker = L.marker([r.gps.lat, r.gps.lon], {icon: createMarkerIcon(mColor, isCompleted)});
+          
+          const etaStr = r.eta && !isCompleted ? `<br><b>ETA:</b> ${new Date(r.eta).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}` : "";
+          const laborHtml = r.labor_team ? `<br><b>Team:</b> ${r.labor_team}<br><b>Status:</b> ${r.labor_status}${etaStr}` : `<br><b>Status:</b> Unassigned`;
+          marker.bindPopup(`<b>ID:</b> #${r.id} | ${r.priority_level}<br><b>Score:</b> ${r.priority_score}${laborHtml}`);
+          markerGroup.addLayer(marker);
+      }
+  });
+}
+
+async function loadStats() {
+  const data = await apiFetch("/api/stats");
+  if (data.error) return;
+  document.getElementById("m-total").textContent = data.total || 0;
+  document.getElementById("m-critical").textContent = data.by_priority?.CRITICAL || 0;
+  document.getElementById("m-avg").textContent = data.avg_score || "0.0";
+  
+  // Show Completed vs Pending Ratio
+  document.getElementById("m-labor").innerHTML = `<span style="color:var(--teal-light)">${data.completed}</span> <span style="color:var(--text3); font-size:16px;">/</span> <span style="color:var(--amber)">${data.yet_to_fix}</span>`;
+  
+  updateMapPins(); 
+
+  const tColor = currentTheme === "light" ? "#656d76" : "#8b949e";
+  const cls = data.by_class || {};
+  if (classChart) classChart.destroy();
+  classChart = new Chart(document.getElementById("chart-class"), {
+    type: "bar", data: { labels: Object.keys(cls), datasets: [{ data: Object.values(cls), backgroundColor: Object.keys(cls).map(l => CLASS_COLORS[l]||"#888") }] },
+    options: { plugins:{legend:{display:false}}, scales: { x:{ticks:{color:tColor}}, y:{ticks:{color:tColor}} } }
+  });
+
+  const pr = data.by_priority || {};
+  const prLabels = ["CRITICAL","HIGH","MEDIUM","LOW", "NORMAL"];
+  if (priorityChart) priorityChart.destroy();
+  priorityChart = new Chart(document.getElementById("chart-priority"), {
+    type: "doughnut", data: { labels: prLabels, datasets: [{ data: prLabels.map(k=>pr[k]||0), backgroundColor: ["#e24b4a","#ef9f27","#fac775","#1d9e75", "#8b949e"], borderWidth:0 }] },
+    options: { plugins: { legend: { labels: {color: tColor} } } }
+  });
+}
+
+// -- Labor Management UI Functions --
+function openAssignModal(id, team) {
+    currentTargetJobId = id;
+    document.getElementById("modal-job-id").textContent = `#${id}`;
+    if(team && team !== 'null') document.getElementById("modal-team-select").value = team;
+    document.getElementById("assign-modal").classList.add("show");
+}
+
+function closeModal() { document.getElementById("assign-modal").classList.remove("show"); }
+
+async function saveAssignment(forceUnassign = null) {
+    let payload = { team: null };
+    if (forceUnassign === null) {
+        payload = {
+            team: document.getElementById("modal-team-select").value,
+            status: document.getElementById("modal-status-select").value
+        };
+    }
+    const data = await apiFetch(`/api/assign_labor/${currentTargetJobId}`, { method: "POST", headers:{"Content-Type": "application/json"}, body: JSON.stringify(payload) });
+
+    if(data.ok) { toast(data.message, "ok"); closeModal(); refreshAll(); } 
+    else toast(data.error, "error");
+}
+
+async function simulateTimeLeap(hours) {
+    const data = await apiFetch(`/api/sim_time_leap`, { 
+        method: "POST", 
+        headers:{"Content-Type": "application/json"}, 
+        body: JSON.stringify({hours: hours}) 
+    });
+    if(data.ok) { toast(data.message, "ok"); refreshAll(); }
+}
+
+async function loadLog() {
+  const data = await apiFetch("/api/log?n=50");
+  if (!Array.isArray(data)) return;
+  const tbody = document.getElementById("log-tbody");
+  if (data.length === 0) { tbody.innerHTML = `<tr><td colspan=\"7\" style=\"text-align:center\">No data</td></tr>`; return; }
+  
+  tbody.innerHTML = [...data].reverse().map(r => {
+    let actionHtml = "";
+    if (r.priority_level === "NORMAL") {
+        actionHtml = `<span style="color:var(--text3); font-size:11px;">No repair needed</span>`;
+    } else {
+        const isAssigned = !!r.labor_team;
+        const btnClass = isAssigned ? "btn-labor active" : "btn-labor";
+        const btnText  = isAssigned ? `<i class='ti ti-edit'></i> Edit` : `<i class='ti ti-plus'></i> Assign`;
+        const eTeam = r.labor_team ? r.labor_team.replace(/'/g, "\\'") : 'null';
+        actionHtml = `<button class="btn btn-sm ${btnClass}" onclick="openAssignModal(${r.id}, '${eTeam}')">${btnText}</button>`;
+    }
+
+    return `<tr>
+      <td>#${r.id}</td><td>${new Date(r.timestamp).toLocaleTimeString()}</td>
+      <td>${r.model_label}${r.video_timestamp_s != null ? `<br><span style="font-size:10px;color:var(--blue)"><i class="ti ti-video"></i> @${r.video_timestamp_s}s</span>` : ""}</td>
+      <td><span class="priority-badge p-${r.priority_level}">${r.priority_level}</span></td>
+      <td style="color:${r.detections?.[0] ? CLASS_COLORS[r.detections[0].class] || 'var(--text)' : 'var(--text3)'}">${r.detections?.[0]?.class || "—"}</td>
+      <td style="color:var(--text2); font-family:monospace;">${r.gps ? `${r.gps.lat.toFixed(4)}, ${r.gps.lon.toFixed(4)}` : "—"}</td>
+      <td>${actionHtml}</td>
+    </tr>`;
+  }).join("");
+}
+
+async function loadLabor() {
+  const data = await apiFetch("/api/log?n=200");
+  if (!Array.isArray(data)) return;
+  
+  const assignedJobs = data.filter(r => r.labor_team).reverse();
+  const tbody = document.getElementById("labor-tbody");
+  
+  if (assignedJobs.length === 0) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;">No active work orders</td></tr>`; return; }
+  
+  tbody.innerHTML = assignedJobs.map(r => {
+    let sClass = "s-pending";
+    if (r.labor_status === "Completed") sClass = "s-completed";
+    else if (r.labor_status === "In Progress") sClass = "s-progress";
+    else if (r.labor_status === "Auto-Dispatched") sClass = "s-auto";
+
+    const etaStr = r.eta && r.labor_status !== "Completed" ? new Date(r.eta).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : "—";
+    const eTeam = r.labor_team.replace(/'/g, "\\'");
+
+    return `<tr>
+      <td><b>#${r.id}</b></td>
+      <td style="color:var(--text); font-weight:500;">${r.labor_team}</td>
+      <td><span class="status-badge ${sClass}">${r.labor_status}</span></td>
+      <td><span class="priority-badge p-${r.priority_level}" style="margin-right:8px">${r.priority_level}</span> ${r.detections?.[0]?.class || "—"}</td>
+      <td style="color:var(--text2); font-family:monospace;">${r.gps ? `${r.gps.lat.toFixed(4)}, ${r.gps.lon.toFixed(4)}` : "—"}</td>
+      <td>${etaStr} <i class="ti ti-edit" style="cursor:pointer; color:var(--blue); margin-left:8px;" onclick="openAssignModal(${r.id}, '${eTeam}')"></i></td>
+    </tr>`;
+  }).join("");
+}
+
+async function clearLog() {
+  if (!confirm("Clear all detection history?")) return;
+  await apiFetch("/api/clear_log", {method:"POST"});
+  toast("Log cleared", "ok"); refreshAll();
+}
+
+function refreshAll() { 
+    checkStatus(); loadStats(); 
+    if(document.getElementById("page-log").classList.contains("active")) loadLog(); 
+    if(document.getElementById("page-labor").classList.contains("active")) loadLabor();
+}
+
+checkStatus();
+loadStats();
+setInterval(checkStatus, 10000);
+</script>
+</body>
+</html>
